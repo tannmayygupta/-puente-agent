@@ -1,6 +1,6 @@
 // ERC-8004 agent identity for Puente (Celo mainnet Identity Registry).
 import { getAddress, parseAbi, parseEventLogs, type Hex } from "viem";
-import { AGENT, enqueue, publicClient, walletClient } from "./chain.js";
+import { AGENT, enqueue, gasOpts, publicClient, walletClient } from "./chain.js";
 import { CAIP2, ENV } from "./config.js";
 
 export const IDENTITY_REGISTRY = getAddress("0x8004A169FB4a3325136EB29fA0ceB6D2e539a432");
@@ -43,7 +43,7 @@ export const toDataUri = (obj: unknown) =>
 
 export async function register(uri: string): Promise<{ agentId: bigint; hash: Hex }> {
   const hash = await enqueue("erc8004-register", () =>
-    walletClient.writeContract({ address: IDENTITY_REGISTRY, abi: identityAbi, functionName: "register", args: [uri] }));
+    gasOpts().then((g) => walletClient.writeContract({ address: IDENTITY_REGISTRY, abi: identityAbi, functionName: "register", args: [uri], ...g } as never)));
   const receipt = await publicClient.waitForTransactionReceipt({ hash });
   if (receipt.status !== "success") throw new Error("register reverted");
   const [ev] = parseEventLogs({ abi: identityAbi, eventName: "Registered", logs: receipt.logs });
@@ -53,7 +53,7 @@ export async function register(uri: string): Promise<{ agentId: bigint; hash: He
 
 export async function setAgentURI(agentId: bigint, uri: string): Promise<Hex> {
   const hash = await enqueue("erc8004-setURI", () =>
-    walletClient.writeContract({ address: IDENTITY_REGISTRY, abi: identityAbi, functionName: "setAgentURI", args: [agentId, uri] }));
+    gasOpts().then((g) => walletClient.writeContract({ address: IDENTITY_REGISTRY, abi: identityAbi, functionName: "setAgentURI", args: [agentId, uri], ...g } as never)));
   await publicClient.waitForTransactionReceipt({ hash });
   return hash;
 }

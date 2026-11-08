@@ -1,4 +1,4 @@
-import { createPublicClient, createWalletClient, http, parseAbi, parseAbiItem, formatUnits, type Address, type Hex } from "viem";
+import { createPublicClient, createWalletClient, getAddress, http, parseAbi, parseAbiItem, formatUnits, type Address, type Hex } from "viem";
 import { privateKeyToAccount } from "viem/accounts";
 import { celo } from "viem/chains";
 import { withAttribution } from "@celo/attribution-tags";
@@ -29,6 +29,24 @@ export const erc20Abi = parseAbi([
 ]);
 export const transferEvent = parseAbiItem("event Transfer(address indexed from, address indexed to, uint256 value)");
 
+// ---- gas: pay in CELO when we have some, otherwise in USDT through Celo's fee-abstraction adapter ----
+// (adapter verified onchain: "Tether USD", 18 decimals). Override with GAS_IN=CELO|USDT.
+export const USDT_GAS_ADAPTER: Address = getAddress("0x0e2a3e05bc9a16f5292a6170456a710cb89c6f72");
+const USDT_TOKEN: Address = getAddress("0x48065fbBE25f71C9282ddf5e1cD6D6A887483D5e");
+let feeCache: { t: number; v: Address | undefined } | null = null;
+export async function gasOpts(): Promise<{ feeCurrency?: Address }> {
+  if (process.env.GAS_IN === "CELO") return {};
+  if (feeCache && Date.now() - feeCache.t < 20_000) return feeCache.v ? { feeCurrency: feeCache.v } : {};
+  let v: Address | undefined;
+  const celoBal = await publicClient.getBalance({ address: AGENT });
+  if (process.env.GAS_IN === "USDT" || celoBal < 50_000_000_000_000_000n /* 0.05 CELO */) {
+    const usdt = await publicClient.readContract({ address: USDT_TOKEN, abi: erc20Abi, functionName: "balanceOf", args: [AGENT] });
+    if (usdt >= 50_000n /* $0.05 */) v = USDT_GAS_ADAPTER;
+  }
+  feeCache = { t: Date.now(), v };
+  return v ? { feeCurrency: v } : {};
+}
+
 // ---- single-writer queue: all wallet sends are serialized so nonces never collide ----
 let tail: Promise<unknown> = Promise.resolve();
 export function enqueue<T>(label: string, fn: () => Promise<T>): Promise<T> {
@@ -47,21 +65,21 @@ async function waitOk(hash: Hex): Promise<Sent> {
 
 export function sendTransfer(token: Address, to: Address, amount: bigint, label = "transfer"): Promise<Sent> {
   return enqueue(label, async () => {
-    const hash = await walletClient.writeContract({ address: token, abi: erc20Abi, functionName: "transfer", args: [to, amount] });
+    const hash = await walletClient.writeContract({ address: token, abi: erc20Abi, functionName: "transfer", args: [to, amount], ...(await gasOpts()) } as never);
     return waitOk(hash);
   });
 }
 
 export function sendApprove(token: Address, spender: Address, amount: bigint, label = "approve"): Promise<Sent> {
   return enqueue(label, async () => {
-    const hash = await walletClient.writeContract({ address: token, abi: erc20Abi, functionName: "approve", args: [spender, amount] });
+    const hash = await walletClient.writeContract({ address: token, abi: erc20Abi, functionName: "approve", args: [spender, amount], ...(await gasOpts()) } as never);
     return waitOk(hash);
   });
 }
 
 export function sendRaw(tx: { to: Address; data: Hex; value?: bigint }, label = "raw"): Promise<Sent> {
   return enqueue(label, async () => {
-    const hash = await walletClient.sendTransaction({ to: tx.to, data: tx.data, value: tx.value ?? 0n });
+    const hash = await walletClient.sendTransaction({ to: tx.to, data: tx.data, value: tx.value ?? 0n, ...(await gasOpts()) } as never);
     return waitOk(hash);
   });
 }

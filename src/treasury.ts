@@ -58,9 +58,37 @@ function addSwapRec(kind: SwapRec["kind"], sell: Address, buy: Address, r: SwapR
   save();
 }
 
+/** Tokens we still owe back to payers (orders paid but not completed). Never convert these away. */
+function liability(token: Address): bigint {
+  return Object.values(db.orders)
+    .filter((o) => o.payToken?.toLowerCase() === token.toLowerCase() && ["paid_seen", "paying_out", "refund_pending"].includes(o.state))
+    .reduce((s, o) => s + BigInt(o.priceAtomic), 0n);
+}
+
+/** Textile routes through USDT. If USDT is short, convert free USDC/USAT (above our liabilities) into USDT. */
+async function ensureUsdt(neededUsd: number): Promise<void> {
+  let have = fmt(await balanceOf(STABLES.USDT.address), 6);
+  if (have >= neededUsd) return;
+  for (const s of [STABLES.USDC, STABLES.USAT]) {
+    const bal = await balanceOf(s.address);
+    const liab = liability(s.address);
+    const free = bal > liab ? bal - liab : 0n;
+    const want = parseUnits((neededUsd - have + 0.05).toFixed(6), 6);
+    const amt = free < want ? free : want;
+    if (fmt(amt, 6) < 1.05) continue; // Textile minimum firm size is about $1
+    const minBuy = (amt * BigInt(10000 - PARAMS.jitSlippageBps - 10)) / 10000n;
+    const r = await swap(s.address, STABLES.USDT.address, amt, { minBuy });
+    addSwapRec("consolidate", s.address, STABLES.USDT.address, r, fmt(r.sold, 6));
+    decide({ kind: "consolidate", pair: `${s.symbol}/USDT`, reason: `USDT was short for a refill; converted ${fmt(r.sold, 6).toFixed(2)} ${s.symbol} into USDT`, tx: r.txHash });
+    have = fmt(await balanceOf(STABLES.USDT.address), 6);
+    if (have >= neededUsd) return;
+  }
+}
+
 async function refill(code: CurrencyCode, sizeUsd: number, rate: number, kind: "refill" | "jit", reason: string) {
   const local = LOCALS[code];
   return exclusive(async () => {
+    await ensureUsdt(sizeUsd + 0.2); // keep a little USDT for gas when gas is paid in USDT
     const usdtBal = fmt(await balanceOf(STABLES.USDT.address), 6);
     if (usdtBal < sizeUsd) throw new TextileError(`USDT too low for ${kind}: ${usdtBal} < ${sizeUsd}`, 0, "insufficient_funds");
     const sellAmt = parseUnits(sizeUsd.toFixed(6), 6);
