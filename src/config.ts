@@ -58,7 +58,7 @@ export const CELO_TOKEN = getAddress("0x471EcE3750Da237f93B8E339c536989b8978a438
 export const TEXTILE_REACTOR = getAddress("0xa9AA0a64769cBed4d3B1Ceb4Df01CdE915C235b3");
 
 /** Locked business parameters (see PLAN.md section 5) */
-export const PARAMS = {
+export const PARAMS: Record<string, number> = {
   feePct: 0.01,
   feeMinUsd: 0.1,
   orderMinUsd: 2,
@@ -81,3 +81,12 @@ export const PARAMS = {
   openUnpaidPerIp: 3,
   dailyOutflowCapUsd: 150,
 };
+
+// LEAN=1: run the whole product on about $5-10 of capital (tiny floats, small orders). Same logic, smaller numbers.
+if (process.env.LEAN === "1") {
+  Object.assign(PARAMS, {
+    feeMinUsd: 0.05, orderMinUsd: 1.5, orderMaxUsd: 5,
+    floatTargetUsd: 2.5, floatLowUsd: 1.2, floatCriticalUsd: 0.6, floatCapUsd: 5, totalFloatCapUsd: 8,
+    refillMinUsd: 1.1, consolidateMinUsd: 1.1, approvalCapUsd: 20, dailyOutflowCapUsd: 40,
+  });
+}
