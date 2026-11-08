@@ -1,4 +1,4 @@
-{
+﻿{
   "compilerOptions": {
     "target": "ES2022",
     "module": "NodeNext",
@@ -10,5 +10,6 @@
     "noEmit": true,
     "types": ["node"]
   },
-  "include": ["src/**/*.ts", "scripts/**/*.ts"]
+  "include": ["src/**/*.ts", "scripts/**/*.ts", "web/**/*.ts"]
 }
+

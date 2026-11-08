@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Puente - dollars in, pesos out</title>
+<meta name="description" content="Send USA₮, USD₮ or USDC and the recipient receives Argentine pesos, Brazilian reais or Colombian pesos on Celo in seconds. An autonomous treasury agent does the rest." />
+<link rel="icon" href="/logo.svg" type="image/svg+xml" />
+<link rel="stylesheet" href="/style.css" />
+</head>
+<body>
+<header class="top">
+  <a class="brand" href="/"><img src="/logo.svg" alt="" width="34" height="34" /><span>Puente</span></a>
+  <div class="top-right">
+    <select id="lang" aria-label="Language"><option value="en">EN</option><option value="es">ES</option><option value="pt">PT</option></select>
+    <button id="connect" class="btn ghost" data-i18n="connect">Connect wallet</button>
+  </div>
+</header>
+
+<main>
+  <section class="hero">
+    <h1 data-i18n="h1">Dollars in. Pesos out. In seconds.</h1>
+    <p class="sub" data-i18n="sub">Pay in USA₮, USD₮ or USDC. The recipient gets Argentine pesos, Brazilian reais or Colombian pesos on Celo, no bank in between.</p>
+  </section>
+
+  <section class="grid">
+    <div class="card" id="formCard">
+      <div class="nl">
+        <label for="nl" data-i18n="nlLabel">Describe it in your own words (optional)</label>
+        <div class="row">
+          <input id="nl" type="text" maxlength="300" data-i18n-ph="nlPh" placeholder="Send $5 in pesos argentinos to 0x…" />
+          <button id="nlBtn" class="btn small" data-i18n="nlBtn">Fill form</button>
+        </div>
+        <small id="nlHint" class="hint"></small>
+      </div>
+
+      <div class="field">
+        <label data-i18n="toLabel">They receive</label>
+        <div id="ccy" class="seg"></div>
+        <small id="rateHint" class="hint"></small>
+      </div>
+
+      <div class="field two">
+        <div>
+          <label for="amt" data-i18n="amtLabel">You send (USD)</label>
+          <input id="amt" type="number" min="2" max="25" step="0.5" value="5" inputmode="decimal" />
+        </div>
+        <div>
+          <label for="tok" data-i18n="payWith">Pay with</label>
+          <select id="tok"><option>USDT</option><option>USAT</option><option>USDC</option></select>
+          <small id="bal" class="hint"></small>
+        </div>
+      </div>
+
+      <div class="field">
+        <label for="rcp" data-i18n="rcpLabel">Recipient Celo address</label>
+        <input id="rcp" type="text" spellcheck="false" placeholder="0x…" />
+      </div>
+
+      <button id="quoteBtn" class="btn primary wide" data-i18n="getQuote">Get quote</button>
+      <div id="err" class="error" role="alert"></div>
+    </div>
+
+    <div class="card" id="rightCard">
+      <div id="quoteBox" class="hidden">
+        <h2 data-i18n="quoteTitle">Your quote</h2>
+        <div class="big"><span id="qLocal">0</span> <small id="qTok">wARS</small></div>
+        <dl class="kv">
+          <div><dt data-i18n="fee">Puente fee</dt><dd id="qFee">$0</dd></div>
+          <div><dt data-i18n="total">You pay</dt><dd id="qTotal">$0</dd></div>
+          <div><dt data-i18n="expires">Quote expires in</dt><dd id="qTimer">60s</dd></div>
+        </dl>
+        <button id="payBtn" class="btn primary wide" data-i18n="payBtn">Pay with wallet</button>
+        <p class="hint" data-i18n="payHint">You sign a gasless USD authorization. Puente never asks for your keys.</p>
+      </div>
+
+      <div id="progress" class="hidden">
+        <h2 data-i18n="progressTitle">Sending…</h2>
+        <ol class="steps">
+          <li id="s1" data-i18n="s1">Payment signed</li>
+          <li id="s2" data-i18n="s2">Payment confirmed onchain</li>
+          <li id="s3" data-i18n="s3">Local currency sent</li>
+        </ol>
+        <div id="receipt" class="receipt hidden"></div>
+      </div>
+
+      <div id="idle">
+        <h2 data-i18n="howTitle">How it works</h2>
+        <ol class="how">
+          <li data-i18n="how1">You pay in dollars over x402. No account, no gas.</li>
+          <li data-i18n="how2">Puente's agent sees your payment onchain, then pays out from its own float of pesos and reais.</li>
+          <li data-i18n="how3">In the background it refills that float on Textile FX, only when the rate is good.</li>
+        </ol>
+        <div class="stats" id="liveStats"></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="tiles">
+    <article><h3 data-i18n="t1h">Instant</h3><p data-i18n="t1p">Payouts leave a pre-funded float, so the recipient is paid in seconds, not after a swap.</p></article>
+    <article><h3 data-i18n="t2h">Autonomous treasury</h3><p data-i18n="t2p">The agent decides when to refill, how much, and when to wait. Every decision is public.</p></article>
+    <article><h3 data-i18n="t3h">Verifiable</h3><p data-i18n="t3p">ERC-8004 identity, tagged transactions and open stats. Check everything onchain.</p></article>
+  </section>
+
+  <section class="card agents">
+    <h2 data-i18n="agentsTitle">For agents and developers</h2>
+    <p class="hint" data-i18n="agentsP">Any x402 client can use Puente. Create an order, then pay it. The 402 challenge lists the exact price.</p>
+<pre><code>curl -s -X POST {origin}/v1/orders -H 'content-type: application/json' \
+  -d '{"currency":"ARS","recipient":"0x…","usd":5}'
+# then pay {origin}/v1/pay?order=&lt;id&gt; with @x402/fetch (USAT, USDT or USDC on Celo)</code></pre>
+    <p class="links"><a href="/stats" target="_blank">/stats</a> · <a href="/agent/log" target="_blank">/agent/log</a> · <a href="/agent.json" target="_blank">/agent.json</a> · <a href="/api/config" target="_blank">/api/config</a></p>
+  </section>
+</main>
+
+<footer>
+  <span id="foot"></span>
+  <span data-i18n="disclaimer">Hackathon prototype on Celo mainnet. Small limits ($2 to $25). Not a licensed money transmitter.</span>
+</footer>
+<script src="/app.js" defer></script>
+</body>
+</html>
