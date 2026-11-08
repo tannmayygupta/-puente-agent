@@ -19,3 +19,6 @@ Thumbs.db
 
 # local agent state
 .claude/
+
+# runtime state
+data/

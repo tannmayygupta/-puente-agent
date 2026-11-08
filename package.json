@@ -9,7 +9,12 @@
     "dev": "tsx watch src/server.ts",
     "start": "tsx src/server.ts",
     "typecheck": "tsc --noEmit",
-    "wallet:new": "node scripts/gen-wallet.mjs"
+    "wallet:new": "node scripts/gen-wallet.mjs",
+    "status": "tsx scripts/status.ts",
+    "t1": "tsx scripts/t1-textile-swap.ts",
+    "t2": "tsx scripts/t2-pay.ts",
+    "register8004": "tsx scripts/register8004.ts",
+    "build:web": "node scripts/build-web.mjs"
   },
   "dependencies": {
     "@celo/attribution-tags": "0.5.0",
