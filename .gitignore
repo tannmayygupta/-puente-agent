@@ -1,0 +1,21 @@
+# secrets - never commit
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# dependencies and builds
+node_modules/
+dist/
+build/
+.next/
+.vercel/
+
+# logs and OS files
+*.log
+.DS_Store
+Thumbs.db
+
+# local agent state
+.claude/
