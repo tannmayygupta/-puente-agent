@@ -1,66 +1,51 @@
 # Puente
 
-**Send dollars, they receive pesos or reais on Celo. An agent does the swap and the payout, and refunds you if anything fails.**
+**Pay a person in Argentina, Brazil or Colombia in the money they spend, with one HTTP call. No bank, no account, no custody pool.**
 
-Built solo for the *Agents on Open Rails* hackathon (Celo x Loops House), with almost no funds. Code written during the hackathon. Live: https://puente-agent-production-bb67.up.railway.app
+Built solo for the *Agents on Open Rails* hackathon (Celo x Loops House). Live app: https://puente-agent-production-bb67.up.railway.app · Agent: ERC-8004 #10055 · Tag: `celo_eabed0a00299`
 
-A payer (a person or any x402 agent) pays an order in **USA₮, USD₮ or USDC over x402**. Puente's agent waits until it can see that payment **onchain**, swaps it through **Textile FX** into **Ripio wARS / wBRL / wCOP**, and sends those to the recipient. If the payout fails, the payer is refunded automatically. It buys chain reads and inference through **buy**, has an **ERC-8004** identity, and tags every transaction with the hackathon attribution code.
-
-## Status: what is verified and what is not (read this first)
-Verified with real mainnet transactions (see [docs/PROOF.md](docs/PROOF.md)): ERC-8004 registration (agent #10055), a Textile FX firm swap with keyless proof-of-control and our tag, and two paid buy calls (Chainstack, Cencori) with settlement hashes ([docs/buy-proof.md](docs/buy-proof.md)).
-
-The x402 payment path was also verified end to end as a **self-test** (our own test wallet paid a 5-cent order, Celo's facilitator settled it, the agent matched the onchain transfer in 9.8 s; local `DRY_RUN` mode, swap and payout skipped; see PROOF.md). Implemented and deployed but **not yet exercised by a real paid order**: the swap-from-order, the wARS/wBRL/wCOP payout, and the refund path. No outside user has paid yet. A treasury mode (float, rate guard, decision log at `/agent/log`) is implemented but **disabled** (`TREASURY_AUTO=0`) because we have almost no capital; payouts instead run in zero-capital mode, where each order's own payment funds its own swap.
-
-## Tracks
-| Track | What exists |
-|---|---|
-| Stable Agents: LatAm (Ripio) | Payout in wARS/wBRL/wCOP implemented; Ripio off-ramp link in the receipt; ES/PT/EN UI. Not yet run with a real order. |
-| Open Corridors: Textile FX | Real firm RFQ swap done on mainnet (tagged). Treasury strategy implemented, disabled. Tiny volume. |
-| Open Corridors: USA₮ with x402 | x402 seller with a dynamic per-order price in USA₮/USD₮/USDC is live (the 402 challenge works). No settled outside payment yet. |
-| Build with buy | Two real paid calls made. Each payout also runs a paid Chainstack batch check (non-fatal if it fails). |
+## The problem
+Someone paid from abroad in Argentina, Brazil or Colombia needs a bank, an account and several fee layers, and an **AI agent or software service cannot pay a human there at all** without a person in the loop. Puente makes that last mile a single x402 payment: the payer settles in USA₮, USD₮ or USDC and the recipient ends up holding the currency they actually spend (Ripio wARS / wBRL / wCOP). It needs three Celo pieces together: **x402** (machine-payable HTTP), **Textile FX** (firm, non-custodial FX quotes) and **Ripio wFIAT** (1:1 local-currency stablecoins).
 
 ## How it works
 ```
-payer --x402 (USA₮/USD₮/USDC, gasless)--> Puente wallet
+payer --x402 (USA₮/USD₮/USDC, gasless)--> Puente agent wallet
   payout worker waits to SEE the payer's Transfer onchain (the HTTP handler never pays)
-  -> Textile firm RFQ swap funded by that payment -> wARS/wBRL/wCOP transfer to recipient
-  failure after payment -> automatic refund
+  -> firm Textile RFQ swap funded by that payment -> wARS/wBRL/wCOP transfer to the recipient
+  failure after payment -> automatic refund (same token, or the local currency if already swapped)
 ```
-1. `POST /v1/orders` creates a 60-second quote (fee 1%, min $0.05; $1.25 to $5 during the hackathon).
-2. `POST /v1/pay?order=<id>` is protected by x402 with a **dynamic price** and three accepted tokens.
-3. The price carries a tiny unique fingerprint, so the worker matches one onchain Transfer to exactly one order.
-4. After three failed payout attempts the payer is refunded (same token, or USDT if the payment was already converted).
+1. `POST /v1/orders` returns a 60-second quote: exact local amount, fee, and a price carrying a unique micro-fingerprint.
+2. `POST /v1/pay?order=<id>` is protected by x402 with a **dynamic per-order price** in three tokens.
+3. The payout worker matches one onchain Transfer to exactly one order, then swaps and pays out. Payer, recipient, amounts and tx hashes are public.
+4. Every transaction we send carries the ERC-8004/ERC-8021 attribution tag via `withAttribution` on the viem wallet client; Textile swaps also request it (`builderCodes`).
 
-## The problem, and why these rails
-Someone in Argentina, Brazil or Colombia who is paid from abroad needs a bank, an account and several fee layers, and an **AI agent or software service cannot pay a human there at all** without a person in the loop. Puente makes that last mile one plain HTTP call: any x402 client pays in USA₮/USD₮/USDC, and the recipient ends up holding the currency they actually spend (Ripio wARS/wBRL/wCOP), with no account and no custody pool. That only works because three things exist together on Celo: x402 (machine-payable HTTP), Textile FX (firm, non-custodial FX quotes) and Ripio's 1:1 local-currency stablecoins.
+## Evidence (all on Celo mainnet, agent wallet `0x492D…e63B`)
+| What | Proof |
+|---|---|
+| ERC-8004 identity #10055 + agentURI to the live `/agent.json` | [register](https://celoscan.io/tx/0x6b29f4248ed82708acc7bfc848cb5ddfcfba36a7a7f7f97fe77599b102b80b6d), [setAgentURI](https://celoscan.io/tx/0x84073ff136b42e1c5eca49aa862bee48c7b63f61e1309d3c912c9db4c7f7f0c8) |
+| Textile FX firm RFQ swap with keyless proof-of-control, tagged | [tx](https://celoscan.io/tx/0xddbe8b49433d43bd5491a15e0a1ae96aadb30fe746a2ecd16956b2b6f0c41a34) |
+| Paid buy calls (Chainstack RPC, Cencori) | [docs/buy-proof.md](docs/buy-proof.md) (3 calls, settlement hashes) |
+| x402 settlement through Celo's facilitator into the PayTo wallet, matched onchain in 9.8 s | [tx](https://celoscan.io/tx/0x042c202765cf2698bfe9d92ed6e7c06fc9325819bf1b56f46f6cb63130922f3b) (our own test payer) |
+| All of the above re-read independently via a paid batched call | [docs/proof-verification.md](docs/proof-verification.md) |
 
-## Tests (what they prove, and what they do not)
-`npm test` runs 20 end-to-end tests against the **real production modules** with an in-memory simulated chain and Textile venue (`src/sim.ts`, enabled only by `SIM=1`; production never sets it). They cover: quote math and unique price fingerprints, input validation and caps, the full paid-order flow (USDT and USA₮), float use, double-spend and false-match protection, order expiry, both refund paths (same token when nothing was swapped; local currency when the swap already happened), venue-outage refunds, treasury decisions (critical refill, rate guard, exposure cap, consolidation, P&L), buy accounting and budget caps, the HTTP API and the x402 402-challenge (exact per-order price for three tokens, payable to the agent wallet; this one test needs network access to Celo's facilitator and skips without it), natural-language parsing, the ERC-8004 file and the attribution suffix. CI runs typecheck and tests on every push.
+## Engineering
+- **20 end-to-end tests** (`npm test`) run the real production modules against an in-memory simulated chain and Textile venue (`src/sim.ts`, `SIM=1`, never set in production): quote math and unique fingerprints, validation and caps, the full paid-order flow in USDT and USA₮, double-spend and false-match protection, expiry, both refund paths, venue-outage refunds, treasury rate guard / exposure cap / consolidation / P&L, buy budget caps, the HTTP API and the x402 402-challenge, NL parsing, the ERC-8004 file and attribution suffix. CI runs typecheck + tests.
+- **Safety by design:** payout only after an observed onchain Transfer; per-order price fingerprint; per-IP rate limits; order caps ($1.25 to $5); daily outflow cap; kill switch (`PAUSED=1`); capped token approvals; single-writer transaction queue.
+- Strict TypeScript, pinned dependencies, install scripts disabled, secrets only in environment variables.
 
-These tests prove the logic, **not** mainnet liquidity or timing. Mainnet proof is only what is listed in [docs/PROOF.md](docs/PROOF.md).
+## Where each track is implemented
+See [docs/JUDGING_MAP.md](docs/JUDGING_MAP.md) for each track's criteria mapped to code, tests and mainnet evidence.
 
-## Known limitations
-- An exact-amount transfer that arrives after its order has fully expired is not matched and needs manual review (there is no orphan-transfer refunder yet).
-- Order records live in a JSON file on a volume (fine for this scale; a database would be next).
-- Hot wallet key in the host's environment: keep balances tiny. No independent security audit.
-- Textile allows only 4 open firm quotes per key/IP and about $1 minimum swap, so we cap concurrency and order size ($1.25 to $5).
-
-## Verify it yourself
-- Attribution tag `celo_eabed0a00299` is applied by `withAttribution` on the viem wallet client (`src/chain.ts`) and requested from Textile (`builderCodes`). Check any hash with `verifyTx`.
-- Agent wallet and x402 PayTo (same address): `0x492DC215C8b7C88c5747ac79EFA5d4Eb894ae63B`. Agent id: 10055 (`/agent.json`).
-- `/stats` and `/agent/log` are public.
-
-## Architecture
-`src/server.ts` API + x402 seller · `src/orders.ts` quotes · `src/payout.ts` onchain-confirmed payouts and refunds · `src/treasury.ts` just-in-time fill and (disabled) float agent · `src/textile.ts` Textile RFQ v2 client · `src/buy.ts` paid buy calls · `src/identity.ts` ERC-8004 · `web/` browser UI · `scripts/` real-money smoke tests.
+## Verification status
+Mainnet-verified: the rows in the Evidence table. Verified in simulation (not on mainnet): the swap-from-order, local-currency payout, refund paths and treasury strategy. Not yet observed: an order paid by an independent user. The treasury float strategy is implemented and disabled in this deployment (`TREASURY_AUTO=0`); payouts run in zero-capital mode, where each order's payment funds its own swap.
 
 ## Run locally
 ```bash
 npm install --ignore-scripts
-npm run wallet:new      # creates the agent wallet in .env (git-ignored)
-npm run build:web && npm start
-npm run t1-celo         # (scripts/t1-celo-swap.ts) real Textile swap
+npm run wallet:new && npm run build:web && npm start
+npm test
 ```
 Env: `AGENT_PRIVATE_KEY`, `X402_API_KEY`, `ATTRIBUTION_CODE`, `PUBLIC_URL`, `DATA_DIR`, `AGENT_ID`, `LEAN`, `TREASURY_AUTO`.
 
-## Limits and honesty
-Hackathon prototype on Celo mainnet with small limits. Not a licensed money transmitter. Gas for payers is paid by the x402 facilitator and is not claimed as our contribution.
+## Known limitations
+An exact-amount transfer arriving after its order fully expired needs manual review. Order records are a JSON file on a volume (a database is next). The hot wallet key is held in the host environment, so balances are kept tiny; there is no independent audit. Textile allows 4 open firm quotes per key/IP and about $1 minimum swap, hence the small order sizes. Hackathon prototype, not a licensed money transmitter.
