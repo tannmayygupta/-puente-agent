@@ -13,6 +13,10 @@ Who it is for: people and businesses that need to pay someone in Argentina, Braz
 
 How it uses the Celo stack: ERC-8004 agent identity (agent #10055), x402 payments through Celo's facilitator with a dynamic per-order price, Ripio wFIAT stablecoins, Textile FX (keyless firm quotes with a signed proof of control), and buy for paid third-party calls. Every transaction we send carries the attribution tag celo_eabed0a00299.
 
+**The problem and why only these rails solve it:** someone in Argentina, Brazil or Colombia who is paid from abroad needs a bank, an account and several fee layers, and an AI agent or software service cannot pay a human there at all without a person in the loop. Puente makes that last mile one HTTP call: any x402 client pays in USA₮/USD₮/USDC and the recipient ends up with the currency they spend (Ripio wARS/wBRL/wCOP), no account, no custody pool. It needs all three Celo pieces together: x402 (machine-payable HTTP), Textile FX (firm non-custodial FX quotes) and Ripio's 1:1 local stablecoins.
+
+**Engineering quality:** 20 end-to-end tests (`npm test`) run the real production modules against a simulated chain/venue: paid-order flow in USDT and USA₮, double-spend and false-match protection, both refund paths, venue-outage refunds, treasury rate guard / exposure cap / consolidation / P&L, buy budget caps, the x402 402-challenge (exact per-order price, 3 tokens), API guards, NL parsing. CI runs typecheck + tests. Tests prove logic, not mainnet liquidity; mainnet evidence is only what docs/PROOF.md lists.
+
 **Tracks entered:** Stable Agents LatAm (Ripio), Open Corridors Textile FX, Open Corridors USA₮ with x402, Build with buy.
 
 **Agent wallet / PayTo:** 0x492DC215C8b7C88c5747ac79EFA5d4Eb894ae63B (the same wallet sends all tagged transactions and receives all x402 payments)
