@@ -43,12 +43,24 @@ async function refund(o: Order, why: string): Promise<void> {
   o.state = "refund_pending"; save();
   try {
     // refund in the same token when we still hold it; if the payment was converted to fund the swap, refund the same USD amount in USDT
+    // 1) same token if we still hold it, 2) USDT if the payment was converted for the swap,
+    // 3) the local currency itself if the swap already happened but the payout transfer failed (value-preserving)
     let token = getAddress(o.payToken);
-    const amount = BigInt(o.priceAtomic);
-    if ((await balanceOf(token)) < amount) token = STABLES.USDT.address;
+    let amount = BigInt(o.priceAtomic);
+    let how = "";
+    if ((await balanceOf(token)) < amount) {
+      if ((await balanceOf(STABLES.USDT.address)) >= amount) { token = STABLES.USDT.address; how = " in USDT"; }
+      else {
+        const local = LOCALS[o.currency];
+        const la = parseUnits(o.payoutLocal, 18);
+        if ((await balanceOf(local.address)) < la) throw new Error("no funds available to refund (needs manual review)");
+        token = local.address; amount = la; how = ` in ${local.symbol} (the payment had already been swapped)`;
+      }
+    }
     const sent = await sendTransfer(token, getAddress(o.payer), amount, `refund-${o.id}`);
-    o.refundTx = sent.hash; o.state = "refunded"; o.note = `refunded${token === o.payToken ? "" : " in USDT"}: ${why}`; saveNow();
-    decide({ kind: "refund", reason: `order ${o.id} refunded in ${o.payToken}: ${why}`, tx: sent.hash });
+    const sym = [...Object.values(STABLES), ...Object.values(LOCALS)].find((t) => t.address.toLowerCase() === token.toLowerCase())?.symbol ?? token;
+    o.refundTx = sent.hash; o.state = "refunded"; o.note = `refunded${how}: ${why}`; saveNow();
+    decide({ kind: "refund", reason: `order ${o.id} refunded in ${sym}: ${why}`, tx: sent.hash });
   } catch (e) {
     o.state = "needs_manual"; o.note = `refund failed: ${(e as Error).message.slice(0, 160)}`; saveNow();
     decide({ kind: "error", reason: `order ${o.id} needs manual refund: ${(e as Error).message.slice(0, 160)}` });
@@ -80,7 +92,10 @@ async function runPayout(o: Order): Promise<void> {
     o.state = "completed";
     o.completedAt = Date.now();
     if (o.payToken && o.payToken !== STABLES.USDT.address) {
-      db.pendingConsolidate[o.payToken] = (BigInt(db.pendingConsolidate[o.payToken] ?? "0") + BigInt(o.priceAtomic)).toString();
+      // credit only what we still hold: a payment that was already converted to fund its own swap is not "waiting"
+      const held = await balanceOf(getAddress(o.payToken));
+      const next = BigInt(db.pendingConsolidate[o.payToken] ?? "0") + BigInt(o.priceAtomic);
+      db.pendingConsolidate[o.payToken] = (next < held ? next : held).toString();
     }
     recordPayout(o.currency, Number(o.payoutLocal), o.rate);
     saveNow();
@@ -88,7 +103,7 @@ async function runPayout(o: Order): Promise<void> {
     afterPayoutChecks(o).catch(() => {});
   } catch (e) {
     const a = attempts.get(o.id) ?? { n: 0, next: 0 };
-    a.n++; a.next = Date.now() + 10_000; attempts.set(o.id, a);
+    a.n++; a.next = Date.now() + Number(process.env.PAYOUT_RETRY_MS ?? 10_000); attempts.set(o.id, a);
     o.note = `payout attempt ${a.n} failed: ${(e as Error).message.slice(0, 140)}`;
     if (a.n >= 3) { await refund(o, "payout failed 3 times"); return; }
     o.state = "paid_seen"; save();

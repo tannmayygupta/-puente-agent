@@ -171,8 +171,13 @@ app.get("/agent.json", (c) => c.json(registrationFile(db.agentId)));
 
 app.use("/*", serveStatic({ root: "./public" }));
 
-serve({ fetch: app.fetch, port: ENV.port }, (i) => {
-  console.log(`Puente listening on :${i.port} | wallet ${AGENT} | tag ${ENV.attribution}`);
-});
-startPayoutWorker();
-startTreasury();
+export { app };
+
+// NO_BOOT=1 lets tests import the app without starting the HTTP server and background workers
+if (process.env.NO_BOOT !== "1") {
+  serve({ fetch: app.fetch, port: ENV.port }, (i) => {
+    console.log(`Puente listening on :${i.port} | wallet ${AGENT} | tag ${ENV.attribution}`);
+  });
+  startPayoutWorker();
+  startTreasury();
+}

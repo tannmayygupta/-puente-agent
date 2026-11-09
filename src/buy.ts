@@ -4,11 +4,12 @@
 import { x402Client, wrapFetchWithPayment } from "@x402/fetch";
 import { ExactEvmScheme } from "@x402/evm/exact/client";
 import { account, AGENT } from "./chain.js";
+import { SIM } from "./sim.js";
 import { ENV, LOCALS, STABLES } from "./config.js";
 import { db, save, type Order } from "./store.js";
 
 const GATEWAY = process.env.BUY_GATEWAY ?? "https://gateway.usebuy.ai";
-const MAX_DAILY_USD = Number(process.env.BUY_MAX_USD_PER_DAY ?? 3);
+const maxDaily = () => Number(process.env.BUY_MAX_USD_PER_DAY ?? 3);
 const PER_CALL_USD = 0.02;
 
 const client = new x402Client();
@@ -34,7 +35,13 @@ function settleTxFrom(res: Response): string | undefined {
 
 async function paid(service: string, path: string, body: unknown, usd: number): Promise<any> {
   if (process.env.BUY_DISABLED === "1") throw new Error("buy disabled");
-  if (spentToday() + usd > MAX_DAILY_USD) throw new Error("daily buy budget reached");
+  if (spentToday() + usd > maxDaily()) throw new Error("daily buy budget reached");
+  if (SIM) { // simulated gateway (tests only): same bookkeeping, no network, fake settlement hash
+    db.buyPayments.push({ ts: Date.now(), service, usd, settleTx: `sim-${db.buyPayments.length + 1}`, ok: true }); save();
+    return Array.isArray(body)
+      ? (body as { id: number; method: string }[]).map((b) => ({ jsonrpc: "2.0", id: b.id, result: b.method === "eth_getCode" ? "0x" : b.method === "eth_getTransactionCount" ? "0x5" : "0x1" }))
+      : { choices: [{ message: { content: "{}" } }] };
+  }
   try {
     const res = await payFetch(GATEWAY + path, {
       method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify(body),

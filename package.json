@@ -11,6 +11,7 @@
     "dev": "tsx watch src/server.ts",
     "start": "tsx src/server.ts",
     "typecheck": "tsc --noEmit",
+    "test": "tsx --test test/pipeline.test.ts",
     "wallet:new": "node scripts/gen-wallet.mjs",
     "status": "tsx scripts/status.ts",
     "t1": "tsx scripts/t1-textile-swap.ts",

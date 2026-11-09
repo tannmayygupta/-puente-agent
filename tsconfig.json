@@ -10,6 +10,6 @@
     "noEmit": true,
     "types": ["node"]
   },
-  "include": ["src/**/*.ts", "scripts/**/*.ts", "web/**/*.ts"]
+  "include": ["src/**/*.ts", "scripts/**/*.ts", "web/**/*.ts", "test/**/*.ts"]
 }
 

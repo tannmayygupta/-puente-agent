@@ -1,6 +1,6 @@
 import { randomBytes } from "node:crypto";
 import { getAddress, isAddress, zeroAddress, type Address } from "viem";
-import { AGENT, publicClient } from "./chain.js";
+import { AGENT, currentBlock } from "./chain.js";
 import { ACTIVE_CURRENCIES, CELO_TOKEN, LOCALS, PARAMS, STABLE_LIST, type CurrencyCode } from "./config.js";
 import { db, save, type Order } from "./store.js";
 import { localPerUsd, pairAvailable } from "./textile.js";
@@ -64,7 +64,7 @@ export async function createOrder(inp: CreateInput): Promise<Order> {
 
   const dp = LOCALS[code].payoutDp;
   const payoutLocal = (Math.floor(usd * rate * 10 ** dp) / 10 ** dp).toFixed(dp);
-  const startBlock = ((await publicClient.getBlockNumber()) - 3n).toString();
+  const startBlock = ((await currentBlock()) - 3n).toString();
   const lang = (["en", "es", "pt"].includes(String(inp.lang)) ? inp.lang : "en") as Order["lang"];
   const now = Date.now();
   const o: Order = {

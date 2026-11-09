@@ -31,6 +31,20 @@ payer --x402 (USA₮/USD₮/USDC, gasless)--> Puente wallet
 3. The price carries a tiny unique fingerprint, so the worker matches one onchain Transfer to exactly one order.
 4. After three failed payout attempts the payer is refunded (same token, or USDT if the payment was already converted).
 
+## The problem, and why these rails
+Someone in Argentina, Brazil or Colombia who is paid from abroad needs a bank, an account and several fee layers, and an **AI agent or software service cannot pay a human there at all** without a person in the loop. Puente makes that last mile one plain HTTP call: any x402 client pays in USA₮/USD₮/USDC, and the recipient ends up holding the currency they actually spend (Ripio wARS/wBRL/wCOP), with no account and no custody pool. That only works because three things exist together on Celo: x402 (machine-payable HTTP), Textile FX (firm, non-custodial FX quotes) and Ripio's 1:1 local-currency stablecoins.
+
+## Tests (what they prove, and what they do not)
+`npm test` runs 20 end-to-end tests against the **real production modules** with an in-memory simulated chain and Textile venue (`src/sim.ts`, enabled only by `SIM=1`; production never sets it). They cover: quote math and unique price fingerprints, input validation and caps, the full paid-order flow (USDT and USA₮), float use, double-spend and false-match protection, order expiry, both refund paths (same token when nothing was swapped; local currency when the swap already happened), venue-outage refunds, treasury decisions (critical refill, rate guard, exposure cap, consolidation, P&L), buy accounting and budget caps, the HTTP API and the x402 402-challenge (exact per-order price for three tokens, payable to the agent wallet; this one test needs network access to Celo's facilitator and skips without it), natural-language parsing, the ERC-8004 file and the attribution suffix. CI runs typecheck and tests on every push.
+
+These tests prove the logic, **not** mainnet liquidity or timing. Mainnet proof is only what is listed in [docs/PROOF.md](docs/PROOF.md).
+
+## Known limitations
+- An exact-amount transfer that arrives after its order has fully expired is not matched and needs manual review (there is no orphan-transfer refunder yet).
+- Order records live in a JSON file on a volume (fine for this scale; a database would be next).
+- Hot wallet key in the host's environment: keep balances tiny. No independent security audit.
+- Textile allows only 4 open firm quotes per key/IP and about $1 minimum swap, so we cap concurrency and order size ($1.25 to $5).
+
 ## Verify it yourself
 - Attribution tag `celo_eabed0a00299` is applied by `withAttribution` on the viem wallet client (`src/chain.ts`) and requested from Textile (`builderCodes`). Check any hash with `verifyTx`.
 - Agent wallet and x402 PayTo (same address): `0x492DC215C8b7C88c5747ac79EFA5d4Eb894ae63B`. Agent id: 10055 (`/agent.json`).

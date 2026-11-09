@@ -2,7 +2,8 @@
 // a takerProof signature from our wallet, produced only when the venue answers 401 proof_of_control_*.
 import { randomBytes } from "node:crypto";
 import { getAddress, parseUnits, toHex, type Address, type Hex } from "viem";
-import { account, AGENT, allowanceOf, balanceOf, fmt, publicClient, sendApprove, sendRaw } from "./chain.js";
+import { account, AGENT, allowanceOf, balanceOf, dryRunCall, fmt, sendApprove, sendRaw } from "./chain.js";
+import { SIM, sim, simPreview } from "./sim.js";
 import { CHAIN_ID, ENV, PARAMS, STABLES, TEXTILE_REACTOR, LOCALS, type CurrencyCode } from "./config.js";
 import { db } from "./store.js";
 
@@ -48,6 +49,7 @@ export interface Preview { ok: boolean; buyAmount: bigint; feeAmount: bigint; re
 const pcache = new Map<string, { t: number; v: Preview }>();
 
 export async function preview(sell: Address, buy: Address, sellAmount: bigint, maxAgeMs = 15_000): Promise<Preview> {
+  if (SIM) { const p = simPreview(sell, buy, sellAmount); db.quotesServed++; return { ok: p.ok, buyAmount: p.buyAmount, feeAmount: 0n, reason: p.reason }; }
   const k = `${sell}:${buy}:${sellAmount}`;
   const hit = pcache.get(k);
   if (hit && Date.now() - hit.t < maxAgeMs) return hit.v;
@@ -181,6 +183,7 @@ export interface SwapResult { rfqId: string; txHash: Hex; sold: bigint; bought: 
  * `minBuy`: if the quote delivers less, we do NOT execute (it lapses unused).
  */
 export async function swap(sell: Address, buy: Address, sellAmount: bigint, opts: { minBuy?: bigint } = {}): Promise<SwapResult> {
+  if (SIM) return simSwap(sell, buy, sellAmount, opts);
   const held = await balanceOf(sell);
   if (held < sellAmount) throw new TextileError(`insufficient ${sell} balance: have ${held}, need ${sellAmount}`, 0, "insufficient_funds");
   await ensureAllowance(sell, sellAmount);
@@ -192,7 +195,7 @@ export async function swap(sell: Address, buy: Address, sellAmount: bigint, opts
   if (q.expiresAt - Date.now() < 4000) throw new TextileError("quote expired before broadcast", 0, "expired", true);
   // dry-run the exact swap first; retry briefly while the chain state settles (never broadcast a reverting tx)
   for (let i = 0; ; i++) {
-    try { await publicClient.call({ account: AGENT, to: q.swap.to, data: q.swap.data, value: q.swap.value }); break; }
+    try { await dryRunCall(q.swap); break; }
     catch (e) {
       if (i >= 8 || q.expiresAt - Date.now() < 5000) throw new TextileError(`swap simulation failed: ${(e as Error).message.split("\n")[0].slice(0, 160)}`, 0, "sim_failed", true);
       await sleep(1500);
@@ -201,6 +204,22 @@ export async function swap(sell: Address, buy: Address, sellAmount: bigint, opts
   const sent = await sendRaw(q.swap, "textile-swap");
   await submit(q.rfqId, q.claimToken, sent.hash);
   return { rfqId: q.rfqId, txHash: sent.hash, sold: q.takerPays, bought: q.buyAmount, feeAmount: q.feeAmount };
+}
+
+/** Simulated venue swap (tests only). Enforces what the real venue enforces: minimum size, funds, quote limit. */
+async function simSwap(sell: Address, buy: Address, sellAmount: bigint, opts: { minBuy?: bigint }): Promise<SwapResult> {
+  const sellIsStable = Object.values(STABLES).some((s) => s.address === sell);
+  const sellUsd = sellIsStable ? Number(sellAmount) / 1e6 : 0;
+  if (sellIsStable && sellUsd < 1) throw new TextileError("below the venue minimum (about $1)", 400, "below_min");
+  if ((await balanceOf(sell)) < sellAmount) throw new TextileError("insufficient funds", 400, "insufficient_funds");
+  if (sim.failSwaps > 0) { sim.failSwaps--; throw new TextileError("sim: venue error", 502, "upstream_error", true); }
+  const p = simPreview(sell, buy, sellAmount);
+  if (!p.ok) throw new TextileError(`no quote: ${p.reason}`, 200, p.reason);
+  if (opts.minBuy !== undefined && p.buyAmount < opts.minBuy) throw new TextileError("quote below limit", 0, "below_limit");
+  sim.debit(sell, AGENT, sellAmount);
+  sim.credit(buy, AGENT, p.buyAmount);
+  sim.block += 1n;
+  return { rfqId: `sim_rfq_${sim.hash().slice(-6)}`, txHash: sim.hash(), sold: sellAmount, bought: p.buyAmount, feeAmount: (sellAmount * 2n) / 10000n };
 }
 
 export async function pairAvailable(code: CurrencyCode): Promise<boolean> {
