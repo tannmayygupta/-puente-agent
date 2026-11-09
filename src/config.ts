@@ -5,6 +5,8 @@ import { getAddress, type Address } from "viem";
 dotenv.config();
 // Render "Secret Files" are mounted here: lets us deploy by pasting .env once, with no per-variable typing
 if (existsSync("/etc/secrets/.env")) dotenv.config({ path: "/etc/secrets/.env" });
+// hosting dashboards/CLIs sometimes append a newline or spaces to secret values: always trim
+for (const k of Object.keys(process.env)) { const v = process.env[k]; if (typeof v === "string" && v !== v.trim()) process.env[k] = v.trim(); }
 
 export const ENV = {
   port: Number(process.env.PORT ?? 3000),
