@@ -2,7 +2,7 @@
 // a takerProof signature from our wallet, produced only when the venue answers 401 proof_of_control_*.
 import { randomBytes } from "node:crypto";
 import { getAddress, parseUnits, toHex, type Address, type Hex } from "viem";
-import { account, AGENT, allowanceOf, balanceOf, fmt, sendApprove, sendRaw } from "./chain.js";
+import { account, AGENT, allowanceOf, balanceOf, fmt, publicClient, sendApprove, sendRaw } from "./chain.js";
 import { CHAIN_ID, ENV, PARAMS, STABLES, TEXTILE_REACTOR, LOCALS, type CurrencyCode } from "./config.js";
 import { db } from "./store.js";
 
@@ -104,6 +104,8 @@ export interface FirmQuote {
   expiresAt: number;
   reactor: Address;
   swap: { to: Address; data: Hex; value: bigint };
+  approval?: { to: Address; data: Hex; value: bigint } | null;
+  raw?: any;
 }
 
 export async function requestFirm(sell: Address, buy: Address, sellAmount: bigint): Promise<FirmQuote> {
@@ -142,6 +144,8 @@ export async function requestFirm(sell: Address, buy: Address, sellAmount: bigin
       expiresAt: new Date(q.expiresAt).getTime(),
       reactor: getAddress(q.reactor ?? TEXTILE_REACTOR),
       swap: { to: getAddress(tx.to), data: tx.data as Hex, value: BigInt(tx.value ?? "0") },
+      approval: d.transactions?.approval ? { to: getAddress(d.transactions.approval.to), data: d.transactions.approval.data as Hex, value: BigInt(d.transactions.approval.value ?? "0") } : null,
+      raw: d,
     };
   }
   throw new TextileError("could not obtain firm quote (proof loop)");
@@ -165,7 +169,9 @@ export async function ensureAllowance(token: Address, needed: bigint, spender: A
   if (cur > 0n && token === STABLES.USDT.address) await sendApprove(token, spender, 0n, "approve-reset");
   const cap = isStable ? parseUnits(String(PARAMS.approvalCapUsd), 6) : needed;
   await sendApprove(token, spender, cap > needed ? cap : needed, "approve");
-  await sleep(1500); // swap must not land in the same block as the approval
+  // RPC nodes can lag a block or two: wait until the new allowance is actually visible, then wait a bit more
+  for (let i = 0; i < 20; i++) { if ((await allowanceOf(token, spender)) >= needed) break; await sleep(1000); }
+  await sleep(2500); // the swap must not land in the same block as the approval
 }
 
 export interface SwapResult { rfqId: string; txHash: Hex; sold: bigint; bought: bigint; feeAmount: bigint }
@@ -184,6 +190,14 @@ export async function swap(sell: Address, buy: Address, sellAmount: bigint, opts
     throw new TextileError(`quote below limit: ${q.buyAmount} < ${opts.minBuy}`, 0, "below_limit");
   }
   if (q.expiresAt - Date.now() < 4000) throw new TextileError("quote expired before broadcast", 0, "expired", true);
+  // dry-run the exact swap first; retry briefly while the chain state settles (never broadcast a reverting tx)
+  for (let i = 0; ; i++) {
+    try { await publicClient.call({ account: AGENT, to: q.swap.to, data: q.swap.data, value: q.swap.value }); break; }
+    catch (e) {
+      if (i >= 8 || q.expiresAt - Date.now() < 5000) throw new TextileError(`swap simulation failed: ${(e as Error).message.split("\n")[0].slice(0, 160)}`, 0, "sim_failed", true);
+      await sleep(1500);
+    }
+  }
   const sent = await sendRaw(q.swap, "textile-swap");
   await submit(q.rfqId, q.claimToken, sent.hash);
   return { rfqId: q.rfqId, txHash: sent.hash, sold: q.takerPays, bought: q.buyAmount, feeAmount: q.feeAmount };

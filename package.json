@@ -14,6 +14,7 @@
     "wallet:new": "node scripts/gen-wallet.mjs",
     "status": "tsx scripts/status.ts",
     "t1": "tsx scripts/t1-textile-swap.ts",
+    "t1-celo": "tsx scripts/t1-celo-swap.ts",
     "t2": "tsx scripts/t2-pay.ts",
     "live-prep": "tsx scripts/live-prep.ts",
     "t4": "tsx scripts/t4-buy.ts",

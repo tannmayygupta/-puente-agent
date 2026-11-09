@@ -92,7 +92,7 @@ export const PARAMS: Record<string, number> = {
 // LEAN=1: run the whole product on about $5-10 of capital (tiny floats, small orders). Same logic, smaller numbers.
 if (process.env.LEAN === "1") {
   Object.assign(PARAMS, {
-    feeMinUsd: 0.05, orderMinUsd: 1.5, orderMaxUsd: 5,
+    feeMinUsd: 0.05, orderMinUsd: 1.25, orderMaxUsd: 5,
     floatTargetUsd: 2.5, floatLowUsd: 1.2, floatCriticalUsd: 0.6, floatCapUsd: 5, totalFloatCapUsd: 8,
     refillMinUsd: 1.1, consolidateMinUsd: 1.1, approvalCapUsd: 20, dailyOutflowCapUsd: 40,
   });

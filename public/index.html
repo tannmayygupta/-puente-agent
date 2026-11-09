@@ -19,7 +19,7 @@
 
 <main>
   <section class="hero">
-    <h1 data-i18n="h1">Dollars in. Pesos out. In seconds.</h1>
+    <h1 data-i18n="h1">Dollars in. Pesos out. No bank.</h1>
     <p class="sub" data-i18n="sub">Pay in USA₮, USD₮ or USDC. The recipient gets Argentine pesos, Brazilian reais or Colombian pesos on Celo, no bank in between.</p>
   </section>
 
@@ -43,7 +43,7 @@
       <div class="field two">
         <div>
           <label for="amt" data-i18n="amtLabel">You send (USD)</label>
-          <input id="amt" type="number" min="2" max="25" step="0.5" value="5" inputmode="decimal" />
+          <input id="amt" type="number" min="1.25" max="5" step="0.25" value="1.5" inputmode="decimal" />
         </div>
         <div>
           <label for="tok" data-i18n="payWith">Pay with</label>
@@ -88,8 +88,8 @@
         <h2 data-i18n="howTitle">How it works</h2>
         <ol class="how">
           <li data-i18n="how1">You pay in dollars over x402. No account, no gas.</li>
-          <li data-i18n="how2">Puente's agent sees your payment onchain, then pays out from its own float of pesos and reais.</li>
-          <li data-i18n="how3">In the background it refills that float on Textile FX, only when the rate is good.</li>
+          <li data-i18n="how2">Puente's agent waits until it sees your payment onchain, swaps it into pesos or reais on Textile FX, and sends them to the recipient.</li>
+          <li data-i18n="how3">If anything fails, you are refunded automatically.</li>
         </ol>
         <div class="stats" id="liveStats"></div>
       </div>
@@ -97,8 +97,8 @@
   </section>
 
   <section class="tiles">
-    <article><h3 data-i18n="t1h">Instant</h3><p data-i18n="t1p">Payouts leave a pre-funded float, so the recipient is paid in seconds, not after a swap.</p></article>
-    <article><h3 data-i18n="t2h">Autonomous treasury</h3><p data-i18n="t2p">The agent decides when to refill, how much, and when to wait. Every decision is public.</p></article>
+    <article><h3 data-i18n="t1h">No custody pool</h3><p data-i18n="t1p">Each payment funds its own real Textile FX swap, then the pesos or reais go straight to the recipient.</p></article>
+    <article><h3 data-i18n="t2h">Safe by design</h3><p data-i18n="t2p">Puente pays out only after it sees your payment onchain, and refunds automatically if anything fails.</p></article>
     <article><h3 data-i18n="t3h">Verifiable</h3><p data-i18n="t3p">ERC-8004 identity, tagged transactions and open stats. Check everything onchain.</p></article>
   </section>
 
@@ -114,7 +114,7 @@
 
 <footer>
   <span id="foot"></span>
-  <span data-i18n="disclaimer">Hackathon prototype on Celo mainnet. Small limits ($2 to $25). Not a licensed money transmitter.</span>
+  <span data-i18n="disclaimer">Hackathon prototype on Celo mainnet. Small limits ($1.25 to $5). Not a licensed money transmitter.</span>
 </footer>
 <script src="/app.js" defer></script>
 </body>
