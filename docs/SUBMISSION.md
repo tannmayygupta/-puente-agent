@@ -1,4 +1,4 @@
-﻿# Submission draft (paste into the loops.house form)
+# Submission draft (paste into the loops.house form)
 
 **Project name:** Puente
 
@@ -23,7 +23,7 @@ How it uses the Celo stack: ERC-8004 agent identity (agent #10055), x402 payment
 
 **ERC-8004:** agent id 10055 (Celo mainnet Identity Registry 0x8004A169FB4a3325136EB29fA0ceB6D2e539a432), agentURI points to the live /agent.json
 
-**Repo:** https://github.com/tannmayygupta/-puente-agent
+**Repo:** https://github.com/tannmayygupta/puente-agent
 
 **Live app:** https://puente-agent-production-bb67.up.railway.app
 
