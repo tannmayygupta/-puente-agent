@@ -86,6 +86,10 @@ export function saveNow(): void {
   renameSync(tmp, file);
 }
 
+// never lose recorded state: flush on exit and on host shutdown (Railway sends SIGTERM on redeploy)
+process.on("exit", () => { try { saveNow(); } catch { /* ignore */ } });
+for (const sig of ["SIGTERM", "SIGINT"] as const) process.on(sig, () => { try { saveNow(); } catch { /* ignore */ } process.exit(0); });
+
 export function decide(d: Omit<Decision, "ts">): void {
   db.decisions.push({ ts: Date.now(), ...d });
   if (db.decisions.length > 2000) db.decisions.splice(0, db.decisions.length - 2000);
