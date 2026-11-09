@@ -1,0 +1,14 @@
+# Render blueprint (free web service). Secrets come from a Secret File named ".env" (paste your local .env there).
+services:
+  - type: web
+    name: puente-agent
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: 22
+      - key: DATA_DIR
+        value: /tmp/puente-data

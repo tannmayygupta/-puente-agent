@@ -1,5 +1,10 @@
-import "dotenv/config";
+import dotenv from "dotenv";
+import { existsSync } from "node:fs";
 import { getAddress, type Address } from "viem";
+
+dotenv.config();
+// Render "Secret Files" are mounted here: lets us deploy by pasting .env once, with no per-variable typing
+if (existsSync("/etc/secrets/.env")) dotenv.config({ path: "/etc/secrets/.env" });
 
 export const ENV = {
   port: Number(process.env.PORT ?? 3000),
