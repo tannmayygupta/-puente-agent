@@ -59,7 +59,8 @@ export const LOCALS: Record<CurrencyCode, Local> = {
   COP: { code: "COP", symbol: "wCOP", address: getAddress("0x8a1D45e102e886510e891d2Ec656a708991e2D76"), decimals: 18, country: "CO", name: "Colombian peso", payoutDp: 0 },
   MXN: { code: "MXN", symbol: "wMXN", address: getAddress("0x337E7456B420bD3481e7FA61fA9850343d610d34"), decimals: 18, country: "MX", name: "Mexican peso", payoutDp: 2 },
 };
-export const ACTIVE_CURRENCIES: CurrencyCode[] = ["ARS", "BRL", "COP"]; // MXN only when makers are online (checked at runtime)
+export const ACTIVE_CURRENCIES: CurrencyCode[] = ["ARS", "BRL", "COP"];
+// (DRY_RUN overrides are applied right after PARAMS below) // MXN only when makers are online (checked at runtime)
 
 export const CELO_TOKEN = getAddress("0x471EcE3750Da237f93B8E339c536989b8978a438");
 export const TEXTILE_REACTOR = getAddress("0xa9AA0a64769cBed4d3B1Ceb4Df01CdE915C235b3");
@@ -89,6 +90,10 @@ export const PARAMS: Record<string, number> = {
   dailyOutflowCapUsd: 150,
 };
 
+// DRY_RUN=1 (LOCAL TESTING ONLY, never on the live server): tiny orders; after the payment is confirmed onchain the
+// payout/swap is skipped. Lets us test x402 settlement + onchain detection with cents that just move between our own wallets.
+export const DRY_RUN = process.env.DRY_RUN === "1";
+
 // LEAN=1: run the whole product on about $5-10 of capital (tiny floats, small orders). Same logic, smaller numbers.
 if (process.env.LEAN === "1") {
   Object.assign(PARAMS, {
@@ -96,4 +101,8 @@ if (process.env.LEAN === "1") {
     floatTargetUsd: 2.5, floatLowUsd: 1.2, floatCriticalUsd: 0.6, floatCapUsd: 5, totalFloatCapUsd: 8,
     refillMinUsd: 1.1, consolidateMinUsd: 1.1, approvalCapUsd: 20, dailyOutflowCapUsd: 40,
   });
+}
+if (DRY_RUN) {
+  Object.assign(PARAMS, { orderMinUsd: 0.04, orderMaxUsd: 1, feePct: 0, feeMinUsd: 0 });
+  console.warn("[DRY_RUN] orders are tiny and payouts are SKIPPED. Never run this on the live server.");
 }

@@ -9,7 +9,7 @@ A payer (a person or any x402 agent) pays an order in **USA₮, USD₮ or USDC o
 ## Status: what is verified and what is not (read this first)
 Verified with real mainnet transactions (see [docs/PROOF.md](docs/PROOF.md)): ERC-8004 registration (agent #10055), a Textile FX firm swap with keyless proof-of-control and our tag, and two paid buy calls (Chainstack, Cencori) with settlement hashes ([docs/buy-proof.md](docs/buy-proof.md)).
 
-Implemented and deployed but **not yet exercised by a real paid order**: the x402 settlement into our PayTo wallet, the wARS/wBRL/wCOP payout, and the refund path. No outside user has paid yet. A treasury mode (float, rate guard, decision log at `/agent/log`) is implemented but **disabled** (`TREASURY_AUTO=0`) because we have almost no capital; payouts instead run in zero-capital mode, where each order's own payment funds its own swap.
+The x402 payment path was also verified end to end as a **self-test** (our own test wallet paid a 5-cent order, Celo's facilitator settled it, the agent matched the onchain transfer in 9.8 s; local `DRY_RUN` mode, swap and payout skipped; see PROOF.md). Implemented and deployed but **not yet exercised by a real paid order**: the swap-from-order, the wARS/wBRL/wCOP payout, and the refund path. No outside user has paid yet. A treasury mode (float, rate guard, decision log at `/agent/log`) is implemented but **disabled** (`TREASURY_AUTO=0`) because we have almost no capital; payouts instead run in zero-capital mode, where each order's own payment funds its own swap.
 
 ## Tracks
 | Track | What exists |

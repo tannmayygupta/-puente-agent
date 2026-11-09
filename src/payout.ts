@@ -1,7 +1,7 @@
 // Payout worker. It NEVER trusts the HTTP handler: it pays out only after it SEES the payer's Transfer onchain.
 import { getAddress, parseUnits } from "viem";
 import { balanceOf, fmt, incomingTransfers, publicClient, sendTransfer } from "./chain.js";
-import { LOCALS, PARAMS, STABLES, STABLE_LIST } from "./config.js";
+import { DRY_RUN, LOCALS, PARAMS, STABLES, STABLE_LIST } from "./config.js";
 import { db, decide, save, saveNow, type Order } from "./store.js";
 import { jitFill, recordPayout } from "./treasury.js";
 import { afterPayoutChecks, beforePayoutChecks } from "./buy.js";
@@ -59,6 +59,13 @@ async function runPayout(o: Order): Promise<void> {
   const local = LOCALS[o.currency];
   const amount = parseUnits(o.payoutLocal, 18);
   o.state = "paying_out"; save();
+  if (DRY_RUN) {
+    o.state = "completed"; o.completedAt = Date.now();
+    o.note = "DRY RUN: payment confirmed onchain; swap and payout skipped (test only)";
+    saveNow();
+    decide({ kind: "dry_run", pair: local.symbol, reason: `order ${o.id}: payment matched onchain; payout skipped (DRY_RUN)`, tx: o.payTx });
+    return;
+  }
   try {
     await beforePayoutChecks(o).catch((e) => decide({ kind: "note", reason: `pre-check skipped: ${(e as Error).message.slice(0, 100)}` }));
     let bal = await balanceOf(local.address);
