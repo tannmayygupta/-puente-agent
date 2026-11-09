@@ -42,8 +42,12 @@ async function refund(o: Order, why: string): Promise<void> {
   if (!o.payer || !o.payToken) { o.state = "needs_manual"; o.note = `no payer to refund: ${why}`; save(); return; }
   o.state = "refund_pending"; save();
   try {
-    const sent = await sendTransfer(getAddress(o.payToken), getAddress(o.payer), BigInt(o.priceAtomic), `refund-${o.id}`);
-    o.refundTx = sent.hash; o.state = "refunded"; o.note = `refunded: ${why}`; saveNow();
+    // refund in the same token when we still hold it; if the payment was converted to fund the swap, refund the same USD amount in USDT
+    let token = getAddress(o.payToken);
+    const amount = BigInt(o.priceAtomic);
+    if ((await balanceOf(token)) < amount) token = STABLES.USDT.address;
+    const sent = await sendTransfer(token, getAddress(o.payer), amount, `refund-${o.id}`);
+    o.refundTx = sent.hash; o.state = "refunded"; o.note = `refunded${token === o.payToken ? "" : " in USDT"}: ${why}`; saveNow();
     decide({ kind: "refund", reason: `order ${o.id} refunded in ${o.payToken}: ${why}`, tx: sent.hash });
   } catch (e) {
     o.state = "needs_manual"; o.note = `refund failed: ${(e as Error).message.slice(0, 160)}`; saveNow();
@@ -60,7 +64,7 @@ async function runPayout(o: Order): Promise<void> {
     let bal = await balanceOf(local.address);
     if (bal < amount) {
       decide({ kind: "float_short", pair: local.symbol, reason: `order ${o.id} needs ${o.payoutLocal} but float is ${fmt(bal, 18).toFixed(2)}; filling just-in-time` });
-      await jitFill(o.currency, Number(o.payoutLocal), o.rate);
+      await jitFill(o.currency, Number(o.payoutLocal), o.rate, o.id);
       bal = await balanceOf(local.address);
       if (bal < amount) throw new Error("float still short after JIT fill");
     }

@@ -1,7 +1,7 @@
 // Treasury agent: keeps a small float of local stablecoins so payouts are instant, and refills it from Textile
 // only when the rate is good (or when it must). Every decision is logged publicly at /agent/log.
 import { parseUnits, type Address } from "viem";
-import { balanceOf, celoBalance, fmt, AGENT } from "./chain.js";
+import { balanceOf, celoBalance, fmt, gasOpts, AGENT } from "./chain.js";
 import { ACTIVE_CURRENCIES, LOCALS, PARAMS, STABLE_LIST, STABLES, type CurrencyCode } from "./config.js";
 import { db, decide, save, type SwapRec } from "./store.js";
 import { localPerUsd, swap, TextileError, type SwapResult } from "./textile.js";
@@ -59,19 +59,20 @@ function addSwapRec(kind: SwapRec["kind"], sell: Address, buy: Address, r: SwapR
 }
 
 /** Tokens we still owe back to payers (orders paid but not completed). Never convert these away. */
-function liability(token: Address): bigint {
+function liability(token: Address, exceptOrder?: string): bigint {
   return Object.values(db.orders)
-    .filter((o) => o.payToken?.toLowerCase() === token.toLowerCase() && ["paid_seen", "paying_out", "refund_pending"].includes(o.state))
+    .filter((o) => o.id !== exceptOrder && o.payToken?.toLowerCase() === token.toLowerCase() && ["paid_seen", "paying_out", "refund_pending"].includes(o.state))
     .reduce((s, o) => s + BigInt(o.priceAtomic), 0n);
 }
 
-/** Textile routes through USDT. If USDT is short, convert free USDC/USAT (above our liabilities) into USDT. */
-async function ensureUsdt(neededUsd: number): Promise<void> {
+/** Textile routes through USDT. If USDT is short, convert free USDC/USAT (above our liabilities) into USDT.
+ *  `ownOrder`: the order being fulfilled right now. Its own payment may be used to fund its own payout (zero-capital mode). */
+async function ensureUsdt(neededUsd: number, ownOrder?: string): Promise<void> {
   let have = fmt(await balanceOf(STABLES.USDT.address), 6);
   if (have >= neededUsd) return;
   for (const s of [STABLES.USDC, STABLES.USAT]) {
     const bal = await balanceOf(s.address);
-    const liab = liability(s.address);
+    const liab = liability(s.address, ownOrder);
     const free = bal > liab ? bal - liab : 0n;
     const want = parseUnits((neededUsd - have + 0.05).toFixed(6), 6);
     const amt = free < want ? free : want;
@@ -85,10 +86,11 @@ async function ensureUsdt(neededUsd: number): Promise<void> {
   }
 }
 
-async function refill(code: CurrencyCode, sizeUsd: number, rate: number, kind: "refill" | "jit", reason: string) {
+async function refill(code: CurrencyCode, sizeUsd: number, rate: number, kind: "refill" | "jit", reason: string, ownOrder?: string) {
   const local = LOCALS[code];
   return exclusive(async () => {
-    await ensureUsdt(sizeUsd + 0.2); // keep a little USDT for gas when gas is paid in USDT
+    const gasInUsdt = (await gasOpts()).feeCurrency !== undefined;
+    await ensureUsdt(sizeUsd + (gasInUsdt ? 0.2 : 0), ownOrder); // keep a little USDT only when gas is paid in USDT
     const usdtBal = fmt(await balanceOf(STABLES.USDT.address), 6);
     if (usdtBal < sizeUsd) throw new TextileError(`USDT too low for ${kind}: ${usdtBal} < ${sizeUsd}`, 0, "insufficient_funds");
     const sellAmt = parseUnits(sizeUsd.toFixed(6), 6);
@@ -106,9 +108,10 @@ async function refill(code: CurrencyCode, sizeUsd: number, rate: number, kind: "
 }
 
 /** Just-in-time fill when a payout finds the float empty. Strict slippage lock vs the quoted rate. */
-export async function jitFill(code: CurrencyCode, neededLocal: number, lockRate: number): Promise<void> {
-  const sizeUsd = Math.max(PARAMS.refillMinUsd, Math.ceil((neededLocal / lockRate) * 1.01 * 100) / 100);
-  await refill(code, sizeUsd, lockRate, "jit", `float short for ${LOCALS[code].symbol}: needed ${neededLocal.toFixed(2)}`);
+export async function jitFill(code: CurrencyCode, neededLocal: number, lockRate: number, ownOrder?: string): Promise<void> {
+  // size = exactly what the payout needs (+0.4% slippage room); Textile's minimum firm size is about $1
+  const sizeUsd = Math.max(1.0, Math.ceil((neededLocal / lockRate) * 1.004 * 100) / 100);
+  await refill(code, sizeUsd, lockRate, "jit", `float short for ${LOCALS[code].symbol}: needed ${neededLocal.toFixed(2)}; funded by the order's own payment`, ownOrder);
 }
 
 async function sampleAndAct(code: CurrencyCode) {
