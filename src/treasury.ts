@@ -189,6 +189,7 @@ export async function tick(): Promise<void> {
 }
 
 export function startTreasury(intervalMs = 30_000) {
+  if (process.env.TREASURY_AUTO === "0") { console.log("[treasury] auto loop disabled (TREASURY_AUTO=0)"); return; }
   setTimeout(() => void tick(), 2_000);
   setInterval(() => void tick(), intervalMs);
 }
